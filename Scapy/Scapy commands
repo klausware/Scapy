@@ -1,0 +1,122 @@
+SCAPY:
+sudo scapy
+send(IP(dst="192.168.162.142")/ICMP()/"ABCDE") // Send basic ping request
+send(IP(src="1.1.1.1",dst="192.168.162.142")/ICMP()/"ABCDE") // Spoof src ip address in ping request
+send(IP(src="1.1.1.1",dst="192.168.162.142",ttl=128)/ICMP()/"ABCDE") // change the time to live
+
+h=sr1(IP(dst="192.168.162.142")/ICMP()) // create packet using sr1() function stored in variable called 'h' - only shows answered packets
+h // display unformatted results of answered packets
+h.show() // display formatted results of answered packets
+
+h=sr1(IP(dst="192.168.162.142")/ICMP()/"ABCDE") // Same as above but with custom payload 'ABCDE'
+h // display unformatted results of answered packets
+h.show() // Same as above
+
+p=sr(IP(dst="192.168.162.142")/TCP(dport=20000)) // create packet using sr() stored in variable called 'p' - also shows unanswered packets
+p // display unformatted results of answered packets
+ans,unansw=_ // store results into vars 'ans' and 'unasw' (since the results consists of two lists). And '_' simply means the latest result
+ans.summary() // display formatted results of the answered packets
+unansw.summary() // disaply formatted results of unanswered packets
+
+p=sr(IP(dst="192.168.162.142")/TCP(dport=[20000,23,80,53])) // send tcp pakcet to range of ports
+p // display unformatted results
+ans,unansw=_ // store results into vars 'ans' and 'unasw' (since the results consists of two lists). And '_' simply means the latest result
+ans.summary() // display formatted results of the answered packets
+
+Output Example:
+IP / TCP 192.168.162.140:ftp_data > 192.168.162.142:20000 S ==> IP / TCP 192.168.162.142:20000 > 192.168.162.140:ftp_data SA / Padding
+IP / TCP 192.168.162.140:ftp_data > 192.168.162.142:telnet S ==> IP / TCP 192.168.162.142:telnet > 192.168.162.140:ftp_data RA / Padding
+IP / TCP 192.168.162.140:ftp_data > 192.168.162.142:http S ==> IP / TCP 192.168.162.142:http > 192.168.162.140:ftp_data RA / Padding
+IP / TCP 192.168.162.140:ftp_data > 192.168.162.142:domain S ==> IP / TCP 192.168.162.142:domain > 192.168.162.140:ftp_data RA / Padding
+
+Analysis of Output:
+In the following packet transmission:
+IP / TCP 192.168.162.140:ftp_data > 192.168.162.142:20000 S ==> IP / TCP 192.168.162.142:20000 > 192.168.162.140:ftp_data SA / Padding
+The 'S' indicates a SYN packet from the src 192.168.162.140
+The 'SA' indicates a SYN-ACK reply packet from the dst 192.168.162.142
+
+However, the TCP handshake is not complete since we only issues one packet out to the destination. Therefore we received the SYN-ACK but we did not return the final ACK:
+-->SYN
+  SYN-ACK<---
+-->ACK        // This step did not happen
+
+In the following packet transmission:
+IP / TCP 192.168.162.140:ftp_data > 192.168.162.142:telnet S ==> IP / TCP 192.168.162.142:telnet > 192.168.162.140:ftp_data RA / Padding
+The 'S' indicates a SYN packet from the src 192.168.162.140
+The 'RA' indicates a RST-ACK reply packet from the dst 192.168.162.142
+
+The reset ack packet is used to indicate that the port is either closed or not listening and to therefore reset the connection
+
+p=sr(IP(dst="192.168.162.142")/TCP(sport=444,dport=[22,80,21,443,20000],flags="S")) // Send TCP packet with flag 'S' for SYN
+p=sr(IP(dst="192.168.162.142")/TCP(sport=999,dport=[22,80,21,443,20000],flags="A")) // Send TCP packet with flag 'A' for ACK
+Note: If I used the same src port, the outbound packets still showed as S. Once I changed to src port to 999 they showed as A
+
+Output Example:
+IP / TCP 192.168.162.140:snpp > 192.168.162.142:ssh A ==> IP / TCP 192.168.162.142:ssh > 192.168.162.140:snpp R / Padding
+IP / TCP 192.168.162.140:snpp > 192.168.162.142:http A ==> IP / TCP 192.168.162.142:http > 192.168.162.140:snpp R / Padding
+IP / TCP 192.168.162.140:snpp > 192.168.162.142:ftp A ==> IP / TCP 192.168.162.142:ftp > 192.168.162.140:snpp R / Padding
+IP / TCP 192.168.162.140:snpp > 192.168.162.142:https A ==> IP / TCP 192.168.162.142:https > 192.168.162.140:snpp R / Padding
+IP / TCP 192.168.162.140:snpp > 192.168.162.142:20000 A ==> IP / TCP 192.168.162.142:20000 > 192.168.162.140:snpp R / Padding
+
+p=sr(IP(src="5.5.5.5",dst="192.168.162.142")/TCP(sport=RandShort(),dport=[20,21,80,3389,20000]),inter=0.5,retry=2,timeout=1) // send packets from randomized src port, using spoofed ip, with an interval of .5 seconds, a retry count of 3, and a timeout of 1 second
+ans,unans=_ // store results into vars 'ans' and 'unans'
+unans.show() // display results of any unanswered packets
+
+sr1(IP(dst="192.168.162.142")/UDP()/DNS(rd=1,qd=DNSQR(qname="www.google.com"))) // send dns packet requesting A record (A record is default)
+rd=1 means to use recursion
+qd=DNSQR(qname=”www.citrix.com”) qd=Query Domain
+DNSQR=DNS Question Record
+qname=<name of what you are querying>
+
+sr1(IP(dst="192.168.162.142")/UDP()/DNS(rd=1,qd=DNSQR(qname="www.google.com",qtype="NS"))) // send dns packet requesting NS record
+
+traceroute(["www.google.com"],maxttl=20) // send TCP (not ICMP) traceroute (default is to use port 80)
+traceroute(["www.google.com"],dport=23,maxttl=20) // send traditional ICMP traceroute
+Note: Unlike traditional traceroutes which wait for each node to reply before moving onto the next, SCAPY sends all packets at once for its traceroute and therefore won't know when to stop. This is why it's important to include the mxttl parameter
+
+arping("192.168.162.*") // run ARP Ping scan on network range
+ans,unansw=sr(IP(dst="192.168.162.1-254")/ICMP()) // run ICMP Ping scan on network range
+
+Output Example:
+Received 235 packets, got 3 answers, remaining 18 packets
+>>> 
+>>> unansw.show()
+0000 IP / ICMP 192.168.162.140 > 192.168.162.143 echo-request 0
+0001 IP / ICMP 192.168.162.140 > 192.168.162.146 echo-request 0
+<snip>
+0016 IP / ICMP 192.168.162.140 > 192.168.162.139 echo-request 0
+0017 IP / ICMP 192.168.162.140 > 192.168.162.145 echo-request 0
+>>> ans.summary()
+IP / ICMP 192.168.162.140 > 192.168.162.135 echo-request 0 ==> IP / ICMP 192.168.162.135 > 192.168.162.140 echo-reply 0 / Padding
+IP / ICMP 192.168.162.140 > 192.168.162.141 echo-request 0 ==> IP / ICMP 192.168.162.141 > 192.168.162.140 echo-reply 0 / Padding
+IP / ICMP 192.168.162.140 > 192.168.162.142 echo-request 0 ==> IP / ICMP 192.168.162.142 > 192.168.162.140 echo-reply 0 / Padding
+
+
+sniff() // perform network packet capture on all interfaces
+a=_     // save results to variable 'a'
+a.nsummary()  // display results
+a[5] // displays the specific packet details for the fifth packet from the sumamry
+
+sniff(iface="eth0",filter="icmp",count=10) // sniff a max of 10 packets for icmp traffic outbound of the eth0 interface
+pkts = rdpcap("/tmp/packet_capture.pcap") // store imported pcacp into 'pkts' and use rdpcap function to read it
+pkts
+pkts.summary()
+pkts[2]
+
+send(IP(dst="<target>")/fuzz(UDP()/NTP(version=4)(loop=1) // send fuzzed packet with UDP destination port will be overloaded by NTP to be 123 and the NTP version will be forced to version 4
+arpcachepoison(target, victim, interval=60) // send a ARP response to the target with your MAC address and thevictim’s IP address
+sendp(Ether()/Dot1Q(vlan=2)/Dot1Q(vlan=7)/IP(dst=target)/ICMP()) // make packet jump to another vlan where the first VLAN is your current VLAN and the second VLAN (vlan=7) is the destination VLAN
+
+#! /usr/bin/env python
+importsys
+from scapy.allimportsr1,IP,ICMP
+p=sr1(IP(dst=sys.argv[1])/ICMP())
+if p:
+    p.show()
+    
+Import sr1()function, the IP()function and the ICMP()functions from Scapy.
+Creating an ICMP packet to send and receive the first response back (sr1 function). 
+The sys.argv[1]indicates that when we save this code you would enter the IP address as the argument i.e. scapy-ping.py 192.168.162.142
+The last 2 lines of code print the response out using the p.show() function
+
+ref: https://theitgeekchronicles.files.wordpress.com/2012/05/scapyguide1.pdf
