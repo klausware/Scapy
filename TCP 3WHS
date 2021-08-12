@@ -1,0 +1,76 @@
+Establishing a TCP 3-Way Handshake Connection Using Scapy Commands.
+
+On RECEIVING machine:
+nc -nlvp 4444
+watch "netstat -ano | grep 4444"
+
+On SENDING machine:
+List current iptables for reference:
+iptables -L
+
+Since the receiving machine will be receiving a lone TCP SYN packet at first, it will promptly reply with a RST, ACK before we 
+can even issue our ACK packet; thereby closing out the connection as invalid. In order to keep the connection open so we can 
+send back our iptables to block incoming RST packets we need to add to our SENDING machine the below iptable rule:
+iptables -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
+
+Build our IP packet:
+>>> i = IP()
+>>> i.dst="192.168.162.128"
+>>> i.display()
+###[ IP ]### 
+  version= 4
+  ihl= None
+  tos= 0x0
+  len= None
+  id= 1
+  flags= 
+  frag= 0
+  ttl= 64
+  proto= hopopt
+  chksum= None
+  src= 192.168.162.146
+  dst= 192.168.162.128
+  \options\
+
+Now build out TCP packet:
+>>> t = TCP()
+>>> t.dport = 4444
+>>> t.flags = "S"
+>>> t.display()
+###[ TCP ]### 
+  sport= ftp_data
+  dport= 4444
+  seq= 0
+  ack= 0
+  dataofs= None
+  reserved= 0
+  flags= S
+  window= 8192
+  chksum= None
+  urgptr= 0
+  options= []
+
+Send our TCP packet encapulsated in our IP packet:
+>>> sr1(i/t)
+Begin emission:
+.Finished sending 1 packets.
+*
+Received 2 packets, got 1 answers, remaining 0 packets
+<IP  version=4 ihl=5 tos=0x0 len=44 id=0 flags=DF frag=0 ttl=64 proto=tcp chksum=0x7468 src=192.168.162.128 dst=192.168.162.146 options=[] |<TCP  sport=4444 dport=ftp_data seq=3389125721L ack=1 dataofs=6 reserved=0 flags=SA window=29200 chksum=0x8fd5 urgptr=0 options=[('MSS', 1460)] |<Padding  load='\x00\x00' |>>>
+
+Update our TCP packet to now be an ACK since the RECEIVER sent us a SYN/ACK. 
+Note that we have set our seq number to be [(seq=3389125721) + 1] from the reply to our SYN packet.
+>>> t.flags = "A"
+>>> t.seq = 1
+>>> t.ack = 3389125722
+
+Send our TCP ACK packet encapulated by an IP packet:
+>>> send(i/t)
+.
+Sent 1 packets.
+>>> 
+
+On our RECEIVING machine we see our netstat output has updated to an ESTABLISHED connection:
+watch "netstat -ano | grep 4444"
+tcp        0      0 192.168.162.128:4444    192.168.162.146:20      ESTABLISHED off (0.00/0/0)
+
